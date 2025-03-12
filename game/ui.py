@@ -26,10 +26,11 @@ style = Style.from_dict({
     'hint': '#ansicyan italic',
     'command': '#ansimagenta',
     'veritas': '#ansigreen bold',
+    'border_info': '#ansiyellow italic',
 })
 
 # Command completer for auto-completion
-command_completer = WordCompleter(['approve', 'deny', 'hint', 'rules', 'help', 'quit'])
+command_completer = WordCompleter(['approve', 'deny', 'hint', 'rules', 'help', 'save', 'quit'])
 
 
 class TerminalUI:
@@ -79,6 +80,7 @@ class TerminalUI:
             "and decide whether to approve or deny their entry.",
             "",
             "You'll be assisted by Veritas, an AI that may provide hints.",
+            "Your decisions will have consequences that carry through your career.",
             "",
             "Type 'help' for a list of commands.",
         ]
@@ -88,7 +90,35 @@ class TerminalUI:
         
         print("\n" + "=" * self.width + "\n")
         
-        input("Press Enter to begin your shift...".center(self.width))
+        input("Press Enter to begin...".center(self.width))
+    
+    def display_border_selection(self, settings):
+        """
+        Display the border setting selection screen.
+        
+        Args:
+            settings (list): List of available border settings.
+            
+        Returns:
+            int: The selected border setting index.
+        """
+        self.clear_screen()
+        print("\n" + "=" * self.width)
+        print("SELECT YOUR BORDER ASSIGNMENT".center(self.width))
+        print("=" * self.width + "\n")
+        
+        for i, setting in enumerate(settings, 1):
+            print(f"{i}. {setting['name']}")
+            print(f"   {setting['description']}\n")
+        
+        choice = 0
+        while choice < 1 or choice > len(settings):
+            try:
+                choice = int(input(f"\nEnter your choice (1-{len(settings)}): "))
+            except ValueError:
+                print("Please enter a valid number.")
+                
+        return choice
     
     def display_document(self, document):
         """
@@ -106,6 +136,19 @@ class TerminalUI:
         print(f"Name:      {document['name']}")
         print(f"Permit:    {document['permit']}")
         print(f"\nBackstory: {document['backstory']}")
+        
+        # Display any additional fields that may be present
+        additional_fields = [key for key in document.keys() 
+                           if key not in ('name', 'permit', 'backstory', 'is_valid')]
+        if additional_fields:
+            print("\nAdditional Information:")
+            for field in additional_fields:
+                if isinstance(document[field], dict):
+                    print(f"{field.capitalize()}: ")
+                    for subkey, value in document[field].items():
+                        print(f"  - {subkey.capitalize()}: {value}")
+                else:
+                    print(f"{field.capitalize()}: {document[field]}")
         
         print("\n" + "-" * self.width)
     
@@ -153,6 +196,7 @@ class TerminalUI:
             ("deny", "Deny the current traveler"),
             ("hint", "Request a hint from Veritas"),
             ("rules", "Display current verification rules"),
+            ("save", "Save your current game progress"),
             ("help", "Show this help information"),
             ("quit", "Exit the game")
         ]
@@ -178,6 +222,18 @@ class TerminalUI:
         
         print(f"\n{narrative_update}")
     
+    def display_ai_reasoning(self, reasoning, confidence):
+        """
+        Display AI reasoning for a decision.
+        
+        Args:
+            reasoning (str): The AI's reasoning.
+            confidence (float): The AI's confidence level.
+        """
+        print("\nBorder Control AI Assessment:")
+        print(f"Confidence: {int(confidence * 100)}%")
+        print(f"Reasoning: {reasoning}")
+    
     def display_game_over(self, ending_type, ending_message):
         """
         Display the game over screen.
@@ -195,6 +251,12 @@ class TerminalUI:
         
         if ending_type == 'good':
             print("Congratulations! You've successfully completed your mission.".center(self.width))
+        elif ending_type == 'corrupt':
+            print("Your corruption has caught up with you.".center(self.width))
+        elif ending_type == 'strict':
+            print("Your strict adherence to rules has made you unpopular.".center(self.width))
+        else:
+            print("Your career has come to an unfortunate end.".center(self.width))
         
         print("\n" + "=" * self.width)
         input("\nPress Enter to exit...".center(self.width))
@@ -229,3 +291,25 @@ class TerminalUI:
         print(f"Day: {day} | Score: {score}")
         print(state_summary)
         print("-" * self.width)
+    
+    def display_setting_info(self, setting):
+        """
+        Display information about the current border setting.
+        
+        Args:
+            setting (dict): The current border setting.
+        """
+        print("\n" + "-" * self.width)
+        print(f"CURRENT ASSIGNMENT: {setting['name']}")
+        print(f"\n{setting['situation']}")
+        
+        print("\nDocument Requirements:")
+        for req in setting['document_requirements']:
+            print(f"- {req}")
+        
+        print("\nCommon Issues:")
+        for issue in setting['common_issues']:
+            print(f"- {issue}")
+            
+        print("\n" + "-" * self.width)
+        input("\nPress Enter to continue...")
