@@ -34,7 +34,8 @@ class MemoryManager:
             "traveler_history": [],       # List of previous travelers
             "decisions": [],              # List of player decisions
             "narrative_events": [],       # Key narrative events
-            "rule_changes": []            # History of rule changes
+            "rule_changes": [],           # History of rule changes
+            "used_names": set()           # Track used names to prevent repetition
         }
         self._ensure_save_directory()
         
@@ -69,6 +70,9 @@ class MemoryManager:
             is_correct (bool): Whether the decision was correct.
             ai_judgment (dict): AI's evaluation of the document.
         """
+        # Add name to used names set
+        self.memory["used_names"].add(traveler_data["name"])
+        
         # Add timestamp for when this traveler was processed
         timestamp = datetime.now().isoformat()
         
@@ -183,6 +187,23 @@ class MemoryManager:
         
         return "\n".join(context)
     
+    def get_used_names_context(self):
+        """
+        Get a list of previously used traveler names to avoid repetition.
+        
+        Returns:
+            str: A formatted string with previously used names.
+        """
+        if not self.memory["used_names"]:
+            return "No previous travelers processed."
+        
+        names_list = list(self.memory["used_names"])
+        # Limit to most recent 20 names to avoid token bloat
+        if len(names_list) > 20:
+            names_list = names_list[-20:]
+        
+        return "Previously encountered travelers: " + ", ".join(names_list) + ". Please generate a new unique name not on this list."
+    
     def save_game(self, filename=None):
         """
         Save the current game state to a file.
@@ -201,8 +222,12 @@ class MemoryManager:
                                 self.save_dir, filename)
         
         try:
+            # Convert used_names set to list for JSON serialization
+            memory_copy = self.memory.copy()
+            memory_copy["used_names"] = list(self.memory["used_names"])
+            
             with open(save_path, 'w') as f:
-                json.dump(self.memory, f, indent=2)
+                json.dump(memory_copy, f, indent=2)
             logger.info(f"Game saved to {save_path}")
             return True
         except Exception as e:
@@ -221,7 +246,20 @@ class MemoryManager:
         """
         try:
             with open(filepath, 'r') as f:
-                self.memory = json.load(f)
+                loaded_memory = json.load(f)
+                
+            # Convert used_names list back to set
+            if "used_names" in loaded_memory:
+                loaded_memory["used_names"] = set(loaded_memory["used_names"])
+            else:
+                # Handle older save files that don't have used_names
+                loaded_memory["used_names"] = set()
+                # Try to reconstruct used_names from traveler history
+                for traveler_record in loaded_memory.get("traveler_history", []):
+                    if "traveler" in traveler_record and "name" in traveler_record["traveler"]:
+                        loaded_memory["used_names"].add(traveler_record["traveler"]["name"])
+            
+            self.memory = loaded_memory
             logger.info(f"Game loaded from {filepath}")
             return True
         except Exception as e:
@@ -242,5 +280,6 @@ class MemoryManager:
             "traveler_history": [],
             "decisions": [],
             "narrative_events": [],
-            "rule_changes": []
+            "rule_changes": [],
+            "used_names": set()
         }
