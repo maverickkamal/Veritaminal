@@ -59,6 +59,7 @@ class GameplayManager:
         self.settings_manager = SettingsManager()
         self._initialize_rules()
         self.ai_judgment = None  # Will store the AI's judgment of the current document
+        self.game_completed = False  # Track if player has completed a full game
 
     def _initialize_rules(self):
         """
@@ -115,6 +116,12 @@ class GameplayManager:
         # Reset game state
         self.score = 0
         self.current_document = None
+        self.game_completed = False
+        
+        # Reset memory but keep used names to prevent repetition across games
+        used_names = self.memory_manager.memory["used_names"]
+        self.memory_manager.reset_memory()
+        self.memory_manager.memory["used_names"] = used_names
         
         # Select a setting
         if setting_id:
@@ -142,8 +149,14 @@ class GameplayManager:
         # Get the current setting
         setting = self.settings_manager.get_current_setting()
         
-        # Generate a document for this setting
-        name, permit, backstory, additional_fields = generate_document_for_setting(setting)
+        # Get used names context to avoid repetition
+        used_names_context = self.memory_manager.get_used_names_context()
+        
+        # Generate a document for this setting with name history awareness
+        name, permit, backstory, additional_fields = generate_document_for_setting(
+            setting, 
+            used_names_context=used_names_context
+        )
         
         # Create the document
         document = {
@@ -152,25 +165,6 @@ class GameplayManager:
             "backstory": backstory,
             **additional_fields  # Include any additional fields
         }
-        
-        # Decide if this document should have an error
-        if random.random() < 0.3:  # 30% chance of error
-            error_response = generate_document_error()
-            # Simplify error handling by just checking for keywords in the response
-            if "permit" in error_response.lower():
-                # Introduce permit error
-                if random.random() < 0.5:
-                    document["permit"] = document["permit"].replace("P", "B")
-                else:
-                    document["permit"] += "X"
-            else:  # Default to name error if permit not mentioned
-                # Introduce name error (single name)
-                name_parts = document["name"].split()
-                if len(name_parts) > 1:
-                    document["name"] = name_parts[0]
-                    # Update backstory to match the now-invalid name
-                    backstory = generate_consistent_backstory(document["name"], "document_generation")
-                    document["backstory"] = backstory
         
         # Use AI to judge the document
         setting_context = self.settings_manager.get_setting_context()
@@ -274,6 +268,10 @@ class GameplayManager:
         self.memory_manager.advance_day()
         day = self.memory_manager.memory["game_state"]["day"]
         
+        # Check if player has completed day 10
+        if day > 10:
+            self.game_completed = True
+        
         # Day-specific events
         if day == 3:
             message = "Day 3: New regulations have been implemented. All permits must now have valid seals."
@@ -345,5 +343,9 @@ class GameplayManager:
                 setting_id = self.memory_manager.memory["border_setting"].get("id")
                 if setting_id:
                     self.settings_manager.select_setting(setting_id)
+            
+            # Set game_completed flag if past day 10
+            if self.memory_manager.memory["game_state"]["day"] > 10:
+                self.game_completed = True
         
         return success
