@@ -13,6 +13,7 @@ import re
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from typing import List, Dict, Optional, Any, TypedDict
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -21,16 +22,37 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+api_key = os.getenv("GEMINI_API_KEY")
+
+if not api_key:
+    raise ValueError("No API key found. Please set GEMINI_API_KEY in your .env file.")
+
+client = genai.Client(api_key=api_key)
+
+# Define Pydantic-like schemas for API responses
+class TravelerDocument(TypedDict):
+    name: str
+    backstory: str
+    additional_fields: Dict[str, Any]
+
+class AIJudgment(TypedDict):
+    decision: str
+    confidence: float
+    reasoning: str
+    suspicious_elements: List[str]
+
 # System instructions for different AI functionalities
 SYSTEM_INSTRUCTIONS = {
     "document_generation": """
     You are a document generation system for a border control game.
-    Generate realistic but fictional traveler information that could include:
-    - Names from various cultures (must be unique/different from previously seen names)
-    - Brief backstories tailored to the border setting
+    Generate ONLY structured JSON data with the following fields:
+    - name: Full name (first and last) with no prefix or label
+    - backstory: Brief one-sentence backstory that mentions the name
+    - additional_fields: Any relevant fields as key-value pairs
     
-    Keep content appropriate and non-political. Occasionally include subtle inconsistencies
-    that a vigilant border agent might detect.
+    DO NOT include labels like "Name:" in your output. Return ONLY valid JSON.
+    Generate unique names different from previously seen travelers.
+    Keep content appropriate and non-political. Occasionally include subtle inconsistencies.
     """,
     
     "veritas_assistant": """
@@ -66,16 +88,13 @@ SYSTEM_INSTRUCTIONS = {
     - Political and social context of the border situation
     - Previous patterns in approval/denial decisions
 
-    Provide a fair and nuanced evaluation.
+    Provide a fair and nuanced evaluation in VALID JSON format with these exact fields:
+    - decision: either "approve" or "deny"
+    - confidence: a float between 0.0 and 1.0
+    - reasoning: a string explaining your decision
+    - suspicious_elements: a list of strings, can be empty
     """
 }
-
-api_key = os.getenv("GEMINI_API_KEY")
-
-if not api_key:
-    raise ValueError("No API key found. Please set GEMINI_API_KEY in your .env file.")
-
-client = genai.Client(api_key=api_key)
 
 def generate_permit_number(valid=True):
     """
@@ -139,12 +158,53 @@ def generate_text(prompt, system_type="document_generation", max_tokens=200):
             )
         )
         
-        
         return response.text
             
     except Exception as e:
         logger.error("Error generating text: %s", str(e))
         return "Error generating text"
+
+def generate_clean_name(used_names_context=""):
+    """
+    Generate a clean name without any prefixes or extra text.
+    
+    Args:
+        used_names_context (str): Context about previously used names.
+        
+    Returns:
+        str: A clean name.
+    """
+    prompt = f"""
+    {used_names_context}
+    
+    Generate a unique full name (first and last) for a traveler.
+    Return ONLY the name with no additional text, labels, or formatting.
+    """
+    
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-lite",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=50,
+                temperature=0.9,
+                system_instruction="Return ONLY a name with first and last name. No additional text or explanation."
+            )
+        )
+        
+        name = response.text.strip()
+        
+        # Remove any common prefixes or formatting that might appear
+        name = re.sub(r'^(Name:|Full name:|Traveler:|Traveler name:)\s*', '', name, flags=re.IGNORECASE)
+        name = re.sub(r'["*_]', '', name)  # Remove quotes, asterisks, underscores
+        
+        return name
+    except Exception as e:
+        logger.error(f"Error generating clean name: {e}")
+        # Return a random fallback name
+        first_names = ["Alex", "Sam", "Jordan", "Morgan", "Casey", "Taylor"]
+        last_names = ["Smith", "Jones", "Garcia", "Chen", "Patel", "Müller"]
+        return f"{random.choice(first_names)} {random.choice(last_names)}"
 
 def generate_document_for_setting(setting, used_names_context="", system_type="document_generation", max_tokens=200):
     """
@@ -167,40 +227,70 @@ def generate_document_for_setting(setting, used_names_context="", system_type="d
     {used_names_context}
     
     Generate a traveler document for someone crossing this border.
-    Include:
-    1. Full name (first and last name) - must be different from previously encountered travelers
-    2. A one-sentence backstory relevant to this border situation that mentions their name
-    3. Any additional relevant fields for this specific border (e.g., visa type, purpose)
+    Return ONLY a valid JSON object with these fields:
+    - name: A full name (first and last) different from previously seen travelers
+    - backstory: A one-sentence backstory that mentions the name
+    - additional_fields: Any relevant border-specific information
     
-    Format as JSON with fields: name, backstory, additional_fields
+    DO NOT include labels like "Name:" in your output.
+    Return ONLY the JSON object with no additional text.
     """
     
     try:
-        response_text = generate_text(context, system_type, max_tokens)
+        # Generate document content with explicit schema enforcement
+        system_instruction = SYSTEM_INSTRUCTIONS.get(system_type, SYSTEM_INSTRUCTIONS["document_generation"])
+        
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-lite",
+            contents=context,
+            config=types.GenerateContentConfig(
+                max_output_tokens=max_tokens,
+                temperature=0.9,
+                system_instruction=system_instruction,
+                response_mime_type="application/json"
+            )
+        )
         
         # Generate permit number using Python, not AI
         permit = generate_permit_number(valid=should_be_valid)
         
-        # Basic parsing of the response
+        # Parse the response as JSON
+        response_text = response.text.strip()
         name = None
         backstory = None
         additional_fields = {}
         
-        # Try to extract fields from the response
         try:
-            # Find JSON-like content and parse it
+            # Clean the response text to ensure it's valid JSON
+            # Remove any non-JSON content
             json_match = re.search(r'({.*})', response_text, re.DOTALL)
             if json_match:
-                json_data = json.loads(json_match.group(1))
-                name = json_data.get("name")
-                backstory = json_data.get("backstory")
-                additional_fields = json_data.get("additional_fields", {})
-        except:
-            logger.error("Failed to parse JSON response")
+                json_text = json_match.group(1)
+            else:
+                json_text = response_text
+                
+            # Parse JSON
+            json_data = json.loads(json_text)
+            
+            # Extract fields, ensuring we get clean values
+            if "name" in json_data and isinstance(json_data["name"], str):
+                # Remove any "Name:" prefix if it somehow got included
+                name = json_data["name"].strip()
+                if name.lower().startswith("name:"):
+                    name = name[5:].strip()
+                    
+            if "backstory" in json_data and isinstance(json_data["backstory"], str):
+                backstory = json_data["backstory"].strip()
+                
+            if "additional_fields" in json_data and isinstance(json_data["additional_fields"], dict):
+                additional_fields = json_data["additional_fields"]
+            
+        except json.JSONDecodeError:
+            logger.error("Failed to parse JSON response: %s", response_text)
         
         # Fallback values if parsing fails
         if not name:
-            name = generate_text("Generate a unique traveler name", "document_generation")
+            name = generate_clean_name(used_names_context)
         
         if not backstory:
             backstory = generate_consistent_backstory(name, "document_generation")
@@ -210,7 +300,7 @@ def generate_document_for_setting(setting, used_names_context="", system_type="d
     except Exception as e:
         logger.error(f"Error generating document for setting: {e}")
         # Return fallback values
-        name = generate_text("Generate a unique traveler name", "document_generation")
+        name = generate_clean_name(used_names_context)
         permit = generate_permit_number(valid=should_be_valid)
         backstory = generate_consistent_backstory(name, "document_generation")
         return name, permit, backstory, {}
@@ -239,7 +329,7 @@ def generate_consistent_backstory(name, system_type="document_generation", max_t
             )
         )
         
-        return response.text
+        return response.text.strip()
     except Exception as e:
         logger.error("Error generating backstory: %s", str(e))
         return f"{name} is a traveler with no additional information available."
@@ -279,7 +369,7 @@ def get_veritas_hint(doc, memory_context="", system_type="veritas_assistant", ma
             )
         )
         
-    return response.text
+    return response.text.strip()
     
 def generate_document_error():
     """
@@ -349,13 +439,11 @@ def ai_judge_document(doc, setting_context, memory_context, system_type="ai_judg
     Evaluate this document based on the border rules and situation.
     Determine if this traveler should be approved or denied entry.
     
-    Format your response as JSON with the following fields:
-    {{
-      "decision": "approve" or "deny",
-      "confidence": [value between 0-1],
-      "reasoning": "Your detailed reasoning",
-      "suspicious_elements": ["List any suspicious elements found", "or empty list if none"]
-    }}
+    Return a valid JSON object with exactly these fields:
+    - decision: "approve" or "deny"
+    - confidence: a number between 0.0 and 1.0
+    - reasoning: a string explaining your decision
+    - suspicious_elements: a list of strings (or empty list)
     """
     
     try:
@@ -365,33 +453,39 @@ def ai_judge_document(doc, setting_context, memory_context, system_type="ai_judg
             config=types.GenerateContentConfig(
                 max_output_tokens=max_tokens,
                 temperature=0.7,  # Lower temperature for more consistent judgments
-                system_instruction=system_instruction
+                system_instruction=system_instruction,
+                response_mime_type="application/json"
             )
         )
         
         # Parse the JSON response
-        response_text = response.text
+        response_text = response.text.strip()
         
-        # Try to extract a JSON object from the response text
-        json_match = re.search(r'({.*})', response_text, re.DOTALL)
-        if json_match:
-            try:
-                judgment = json.loads(json_match.group(1))
-                # Ensure required fields are present
-                required_fields = ["decision", "confidence", "reasoning", "suspicious_elements"]
-                for field in required_fields:
-                    if field not in judgment:
-                        judgment[field] = "missing" if field != "confidence" else 0.5
-                        
-                # Override with a balanced probability to ensure fair gameplay
-                if random.random() < 0.3:  # 30% chance to flip the decision
-                    original_decision = judgment["decision"]
-                    judgment["decision"] = "deny" if original_decision == "approve" else "approve"
-                    judgment["confidence"] = max(0.1, min(0.7, judgment["confidence"]))  # Lower confidence when flipping
+        try:
+            # Clean the response text to ensure it's valid JSON
+            json_match = re.search(r'({.*})', response_text, re.DOTALL)
+            if json_match:
+                json_text = json_match.group(1)
+            else:
+                json_text = response_text
                 
-                return judgment
-            except json.JSONDecodeError:
-                logger.error("Failed to parse AI judgment as JSON")
+            judgment = json.loads(json_text)
+            
+            # Ensure required fields are present
+            required_fields = ["decision", "confidence", "reasoning", "suspicious_elements"]
+            for field in required_fields:
+                if field not in judgment:
+                    judgment[field] = "missing" if field != "confidence" else 0.5
+                    
+            # Override with a balanced probability to ensure fair gameplay
+            if random.random() < 0.3:  # 30% chance to flip the decision
+                original_decision = judgment["decision"]
+                judgment["decision"] = "deny" if original_decision == "approve" else "approve"
+                judgment["confidence"] = max(0.1, min(0.7, judgment["confidence"]))  # Lower confidence when flipping
+            
+            return judgment
+        except json.JSONDecodeError:
+            logger.error("Failed to parse AI judgment as JSON: %s", response_text)
         
         # Fallback with balanced probability
         return {
@@ -452,4 +546,4 @@ def generate_narrative_update(current_state, decision, is_correct, memory_contex
         )
         
     
-    return response.text
+    return response.text.strip()
