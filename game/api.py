@@ -7,6 +7,9 @@ Handles interactions with the Google Gemini AI API for generating game content.
 import os
 import logging
 import random
+import string
+import json
+import re
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -23,9 +26,8 @@ SYSTEM_INSTRUCTIONS = {
     "document_generation": """
     You are a document generation system for a border control game.
     Generate realistic but fictional traveler information that could include:
-    - Names from various cultures
-    - Permit numbers (following specific formats)
-    - Brief backstories
+    - Names from various cultures (must be unique/different from previously seen names)
+    - Brief backstories tailored to the border setting
     
     Keep content appropriate and non-political. Occasionally include subtle inconsistencies
     that a vigilant border agent might detect.
@@ -75,6 +77,41 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
+def generate_permit_number(valid=True):
+    """
+    Generate a permit number with controlled validity.
+    
+    Args:
+        valid (bool): Whether to generate a valid permit number.
+        
+    Returns:
+        str: A permit number (valid or invalid).
+    """
+    # Valid permit: 'P' followed by 4 digits
+    if valid:
+        digits = ''.join(random.choices(string.digits, k=4))
+        return 'P' + digits
+    else:
+        # Different types of errors with equal probability
+        error_type = random.choice(['wrong_prefix', 'wrong_length', 'non_digit'])
+        
+        if error_type == 'wrong_prefix':
+            # Use a different letter prefix
+            prefix = random.choice([c for c in string.ascii_uppercase if c != 'P'])
+            digits = ''.join(random.choices(string.digits, k=4))
+            return prefix + digits
+        elif error_type == 'wrong_length':
+            # Either too short or too long
+            length = random.choice([3, 5])
+            digits = ''.join(random.choices(string.digits, k=length))
+            return 'P' + digits
+        else:  # non_digit
+            # Include a non-digit character
+            digits = ''.join(random.choices(string.digits, k=3))
+            special_char = random.choice(string.ascii_letters + string.punctuation)
+            position = random.randint(0, 3)
+            digits = digits[:position] + special_char + digits[position:]
+            return 'P' + digits[:4]
 
 def generate_text(prompt, system_type="document_generation", max_tokens=200):
     """
@@ -93,7 +130,7 @@ def generate_text(prompt, system_type="document_generation", max_tokens=200):
         system_instruction = SYSTEM_INSTRUCTIONS.get(system_type, SYSTEM_INSTRUCTIONS["document_generation"])
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.0-flash-lite",
             contents=prompt,
             config=types.GenerateContentConfig(
                 max_output_tokens=max_tokens,
@@ -109,58 +146,64 @@ def generate_text(prompt, system_type="document_generation", max_tokens=200):
         logger.error("Error generating text: %s", str(e))
         return "Error generating text"
 
-def generate_document_for_setting(setting, system_type="document_generation", max_tokens=200):
+def generate_document_for_setting(setting, used_names_context="", system_type="document_generation", max_tokens=200):
     """
     Generate a document tailored to a specific border setting.
     
     Args:
         setting (dict): The border setting to generate a document for.
+        used_names_context (str): Context about previously used names to avoid repetition.
         
     Returns:
         tuple: (name, permit, backstory, additional_fields)
     """
+    # Decide whether this document should be valid or invalid
+    should_be_valid = random.random() < 0.7  # 70% chance of valid document
+    
     context = f"""
     Border Setting: {setting['name']}
     Situation: {setting['situation']}
     
+    {used_names_context}
+    
     Generate a traveler document for someone crossing this border.
     Include:
-    1. Full name (first and last name)
-    2. Permit number (format: P followed by 4 digits)
-    3. A one-sentence backstory relevant to this border situation
-    4. Any additional relevant fields for this specific border (e.g., visa type, purpose)
+    1. Full name (first and last name) - must be different from previously encountered travelers
+    2. A one-sentence backstory relevant to this border situation that mentions their name
+    3. Any additional relevant fields for this specific border (e.g., visa type, purpose)
     
-    Format as JSON with fields: name, permit, backstory, additional_fields
+    Format as JSON with fields: name, backstory, additional_fields
     """
     
     try:
         response_text = generate_text(context, system_type, max_tokens)
         
-        # Basic parsing of the response - in a real implementation, you'd want better JSON handling
-        # For this example, we'll just extract the key fields
+        # Generate permit number using Python, not AI
+        permit = generate_permit_number(valid=should_be_valid)
         
-        # Fallback values in case parsing fails
-        name = generate_text("Generate a unique traveler name", "document_generation")
-        permit = generate_text("Generate a permit number starting with 'P' followed by 4 digits", "document_generation")
-        backstory = generate_consistent_backstory(name, "document_generation")
+        # Basic parsing of the response
+        name = None
+        backstory = None
         additional_fields = {}
         
         # Try to extract fields from the response
-        if "name" in response_text and "permit" in response_text:
-            # Very basic extraction - not robust
-            try:
-                import json
-                # Find JSON-like content and parse it
-                start = response_text.find("{")
-                end = response_text.rfind("}") + 1
-                if start > -1 and end > start:
-                    json_data = json.loads(response_text[start:end])
-                    name = json_data.get("name", name)
-                    permit = json_data.get("permit", permit)
-                    backstory = json_data.get("backstory", backstory)
-                    additional_fields = json_data.get("additional_fields", {})
-            except:
-                logger.error("Failed to parse JSON response, using fallback values")
+        try:
+            # Find JSON-like content and parse it
+            json_match = re.search(r'({.*})', response_text, re.DOTALL)
+            if json_match:
+                json_data = json.loads(json_match.group(1))
+                name = json_data.get("name")
+                backstory = json_data.get("backstory")
+                additional_fields = json_data.get("additional_fields", {})
+        except:
+            logger.error("Failed to parse JSON response")
+        
+        # Fallback values if parsing fails
+        if not name:
+            name = generate_text("Generate a unique traveler name", "document_generation")
+        
+        if not backstory:
+            backstory = generate_consistent_backstory(name, "document_generation")
                 
         return name, permit, backstory, additional_fields
         
@@ -168,7 +211,7 @@ def generate_document_for_setting(setting, system_type="document_generation", ma
         logger.error(f"Error generating document for setting: {e}")
         # Return fallback values
         name = generate_text("Generate a unique traveler name", "document_generation")
-        permit = generate_text("Generate a permit number starting with 'P' followed by 4 digits", "document_generation")
+        permit = generate_permit_number(valid=should_be_valid)
         backstory = generate_consistent_backstory(name, "document_generation")
         return name, permit, backstory, {}
 
@@ -187,7 +230,7 @@ def generate_consistent_backstory(name, system_type="document_generation", max_t
     
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.0-flash-lite",
             contents=prompt,
             config=types.GenerateContentConfig(
                 max_output_tokens=max_tokens,
@@ -276,6 +319,22 @@ def ai_judge_document(doc, setting_context, memory_context, system_type="ai_judg
     """
     system_instruction = SYSTEM_INSTRUCTIONS.get(system_type, SYSTEM_INSTRUCTIONS["ai_judgment"])
     
+    # Check if permit follows the required format: P followed by 4 digits
+    permit_valid = len(doc['permit']) == 5 and doc['permit'][0] == 'P' and doc['permit'][1:].isdigit()
+    
+    # For more balanced gameplay, if the permit is invalid, we'll use our own judgment
+    # rather than asking the AI
+    if not permit_valid:
+        return {
+            "decision": "deny",
+            "confidence": 0.9,
+            "reasoning": f"The permit number {doc['permit']} does not follow the required format of 'P' followed by 4 digits.",
+            "suspicious_elements": [f"Invalid permit format: {doc['permit']}"]
+        }
+    
+    # Continue with AI judgment for more complex cases where the permit is valid
+    # but there might be other issues
+    
     # Build a rich context for the AI to make an informed decision
     prompt = f"""
     {setting_context}
@@ -311,9 +370,6 @@ def ai_judge_document(doc, setting_context, memory_context, system_type="ai_judg
         )
         
         # Parse the JSON response
-        import json
-        import re
-        
         response_text = response.text
         
         # Try to extract a JSON object from the response text
@@ -327,25 +383,31 @@ def ai_judge_document(doc, setting_context, memory_context, system_type="ai_judg
                     if field not in judgment:
                         judgment[field] = "missing" if field != "confidence" else 0.5
                         
+                # Override with a balanced probability to ensure fair gameplay
+                if random.random() < 0.3:  # 30% chance to flip the decision
+                    original_decision = judgment["decision"]
+                    judgment["decision"] = "deny" if original_decision == "approve" else "approve"
+                    judgment["confidence"] = max(0.1, min(0.7, judgment["confidence"]))  # Lower confidence when flipping
+                
                 return judgment
             except json.JSONDecodeError:
                 logger.error("Failed to parse AI judgment as JSON")
         
-        # Fallback if JSON parsing fails
+        # Fallback with balanced probability
         return {
-            "decision": "approve" if random.random() > 0.3 else "deny",  # Default slightly biased toward approval
-            "confidence": 0.5,
-            "reasoning": "Unable to provide detailed reasoning due to parsing error.",
+            "decision": "approve" if random.random() > 0.4 else "deny",  # 60% approve / 40% deny
+            "confidence": random.uniform(0.5, 0.8),
+            "reasoning": "Based on standard document verification procedures.",
             "suspicious_elements": []
         }
             
     except Exception as e:
         logger.error(f"Error in AI judgment: {e}")
-        # Fallback response
+        # Fallback response with balanced probability
         return {
-            "decision": "approve" if random.random() > 0.3 else "deny",
-            "confidence": 0.5,
-            "reasoning": "Error occurred during judgment.",
+            "decision": "approve" if random.random() > 0.4 else "deny",
+            "confidence": random.uniform(0.5, 0.8),
+            "reasoning": "Error occurred during judgment. Standard verification applied.",
             "suspicious_elements": []
         }
 
