@@ -115,7 +115,8 @@ def run_main_menu_loop(menu_manager):
             menu_manager.view_game_rules()
             
         elif choice == "5":  # Quit game
-            print("\nThank you for playing Veritaminal!")
+            ui = menu_manager.ui
+            print("\n" + ui.colored_text("Thank you for playing Veritaminal!", 'success'))
             break
 
 def run_gameplay_loop(menu_manager):
@@ -157,16 +158,14 @@ def run_gameplay_loop(menu_manager):
             
             # Display completion message
             ui.clear_screen()
-            print("\n" + "=" * ui.width)
-            print("CAREER COMPLETE".center(ui.width))
-            print("=" * ui.width + "\n")
-            print(f"You have completed your 10-day assignment!".center(ui.width))
-            print(f"Final score: {score}".center(ui.width))
+            ui.draw_border("CAREER COMPLETE")
+            print(ui.colored_text(f"You have completed your 10-day assignment!".center(ui.width), 'success'))
+            print(ui.colored_text(f"Final score: {score}".center(ui.width), 'value'))
             
             # Update career stats
             menu_manager.update_career_stats(gameplay_manager)
             
-            input("\nPress Enter to return to main menu...".center(ui.width))
+            input("\n" + ui.colored_text("Press Enter to return to main menu...".center(ui.width), 'hint'))
             break
         
         # Generate new document for current day
