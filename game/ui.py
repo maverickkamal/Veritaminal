@@ -12,11 +12,16 @@ from prompt_toolkit import prompt
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style
 from prompt_toolkit.completion import WordCompleter
+from colorama import init, Fore, Back, Style as ColoramaStyle
+
+# Initialize colorama for cross-platform terminal colors
+# Using settings that worked well in testing
+init(autoreset=True, convert=True, strip=False, wrap=True)
 
 logger = logging.getLogger(__name__)
 
-# Define color styles
-style = Style.from_dict({
+# Define color styles for prompt_toolkit
+pt_style = Style.from_dict({
     'title': '#ansiyellow bold',
     'header': '#ansiblue bold',
     'normal': '#ansiwhite',
@@ -43,6 +48,55 @@ class TerminalUI:
         """
         self.width = 80  # Default width
         self.adjust_terminal_size()
+        
+        # Define color styles for terminal output based on test results (Option 3)
+        self.colors = {
+            'title': Fore.YELLOW + Back.BLUE,  # Yellow on blue for titles
+            'header': Fore.BLUE,
+            'normal': Fore.WHITE,
+            'error': Fore.RED,
+            'success': Fore.GREEN,
+            'warning': Fore.YELLOW,
+            'hint': Fore.CYAN,
+            'command': Fore.MAGENTA,
+            'veritas': Fore.GREEN,
+            'border_info': Fore.YELLOW,
+            'border': Fore.BLUE,
+            'key': Fore.CYAN,
+            'value': Fore.WHITE,
+            'reset': ColoramaStyle.RESET_ALL,
+        }
+        
+        # Add special combinations for emphasis using background colors instead of brightness
+        self.emphasis = {
+            'title': Back.BLACK,       # Yellow on black for titles
+            'key': Back.BLACK,         # Cyan on black for keys
+            'veritas': Back.BLACK,     # Green on black for Veritas
+            'error': Back.BLACK,       # Red on black for errors
+            'success': Back.BLACK,     # Green on black for success
+        }
+
+    def _check_color_support(self):
+        """
+        Check if the terminal supports colors.
+        
+        Returns:
+            bool: True if colors are supported, False otherwise.
+        """
+        # Force color support on Windows
+        if os.name == 'nt':
+            return True
+        
+        # Check for NO_COLOR environment variable
+        if os.environ.get('NO_COLOR'):
+            return False
+            
+        # Check if output is redirected
+        if not sys.stdout.isatty():
+            return 'FORCE_COLOR' in os.environ
+        
+        # Most terminals support colors nowadays
+        return True
     
     def adjust_terminal_size(self):
         """
@@ -62,16 +116,58 @@ class TerminalUI:
         """
         os.system('cls' if os.name == 'nt' else 'clear')
     
+    def colored_text(self, text, style_name):
+        """
+        Return text with the specified color style.
+        
+        Args:
+            text (str): Text to color.
+            style_name (str): Name of the style to apply.
+            
+        Returns:
+            str: Colored text.
+        """
+        if style_name not in self.colors:
+            return text
+            
+        # Apply background emphasis for specific styles that would normally use BRIGHT
+        if style_name in self.emphasis:
+            return f"{self.colors[style_name]}{self.emphasis[style_name]}{text}{self.colors['reset']}"
+            
+        return f"{self.colors[style_name]}{text}{self.colors['reset']}"
+    
+    def colored_print(self, text, style_name='normal'):
+        """
+        Print text with the specified color style.
+        
+        Args:
+            text (str): Text to print.
+            style_name (str): Name of the style to apply.
+        """
+        print(self.colored_text(text, style_name))
+    
+    def draw_border(self, title=None):
+        """
+        Draw a border with an optional title.
+        
+        Args:
+            title (str, optional): Title to display in the border.
+        """
+        border = "=" * self.width  # Using '=' instead of '-' for borders
+        print(self.colored_text("\n" + border, 'border'))
+        
+        if title:
+            print(self.colored_text(title.center(self.width), 'title'))
+            print(self.colored_text(border + "\n", 'border'))
+        else:
+            print()
+    
     def display_welcome(self):
         """
         Display the welcome message.
         """
         self.clear_screen()
-        title = "VERITAMINAL: Document Verification Game"
-        
-        print("\n" + "=" * self.width)
-        print(title.center(self.width))
-        print("=" * self.width + "\n")
+        self.draw_border("VERITAMINAL: Document Verification Game")
         
         welcome_text = [
             "Welcome to the border checkpoint.",
@@ -86,11 +182,11 @@ class TerminalUI:
         ]
         
         for line in welcome_text:
-            print(line.center(self.width))
+            print(self.colored_text(line.center(self.width), 'normal'))
         
-        print("\n" + "=" * self.width + "\n")
+        print("\n" + self.colored_text("=" * self.width, 'border') + "\n")
         
-        input("Press Enter to begin...".center(self.width))
+        input(self.colored_text("Press Enter to begin...".center(self.width), 'hint'))
     
     def display_border_selection(self, settings):
         """
@@ -103,20 +199,18 @@ class TerminalUI:
             int: The selected border setting index.
         """
         self.clear_screen()
-        print("\n" + "=" * self.width)
-        print("SELECT YOUR BORDER ASSIGNMENT".center(self.width))
-        print("=" * self.width + "\n")
+        self.draw_border("SELECT YOUR BORDER ASSIGNMENT")
         
         for i, setting in enumerate(settings, 1):
-            print(f"{i}. {setting['name']}")
-            print(f"   {setting['description']}\n")
+            print(self.colored_text(f"{i}. {setting['name']}", 'header'))
+            print(self.colored_text(f"   {setting['description']}\n", 'normal'))
         
         choice = 0
         while choice < 1 or choice > len(settings):
             try:
-                choice = int(input(f"\nEnter your choice (1-{len(settings)}): "))
+                choice = int(input(self.colored_text(f"\nEnter your choice (1-{len(settings)}): ", 'hint')))
             except ValueError:
-                print("Please enter a valid number.")
+                self.colored_print("Please enter a valid number.", 'error')
                 
         return choice
     
@@ -128,29 +222,30 @@ class TerminalUI:
             document (dict): The document to display.
         """
         self.clear_screen()
-        print("\n" + "-" * self.width)
-        print("TRAVELER DOCUMENT".center(self.width))
-        print("-" * self.width + "\n")
+        # Using '=' instead of '-' for borders as in Option 3
+        print(self.colored_text("\n" + "=" * self.width, 'border'))
+        print(self.colored_text("TRAVELER DOCUMENT".center(self.width), 'title'))
+        print(self.colored_text("=" * self.width + "\n", 'border'))
         
         # Display document details with formatting
-        print(f"Name:      {document['name']}")
-        print(f"Permit:    {document['permit']}")
-        print(f"\nBackstory: {document['backstory']}")
+        print(f"{self.colored_text('Name:', 'key')}      {self.colored_text(document['name'], 'value')}")
+        print(f"{self.colored_text('Permit:', 'key')}    {self.colored_text(document['permit'], 'value')}")
+        print(f"\n{self.colored_text('Backstory:', 'key')} {self.colored_text(document['backstory'], 'value')}")
         
         # Display any additional fields that may be present
         additional_fields = [key for key in document.keys() 
                            if key not in ('name', 'permit', 'backstory', 'is_valid')]
         if additional_fields:
-            print("\nAdditional Information:")
+            print(self.colored_text("\nAdditional Information:", 'header'))
             for field in additional_fields:
                 if isinstance(document[field], dict):
-                    print(f"{field.capitalize()}: ")
+                    print(self.colored_text(f"{field.capitalize()}: ", 'key'))
                     for subkey, value in document[field].items():
-                        print(f"  - {subkey.capitalize()}: {value}")
+                        print(f"  - {self.colored_text(subkey.capitalize() + ':', 'key')} {self.colored_text(value, 'value')}")
                 else:
-                    print(f"{field.capitalize()}: {document[field]}")
+                    print(f"{self.colored_text(field.capitalize() + ':', 'key')} {self.colored_text(document[field], 'value')}")
         
-        print("\n" + "-" * self.width)
+        print(self.colored_text("\n" + "-" * self.width, 'border'))
     
     def display_veritas_hint(self, hint):
         """
@@ -159,10 +254,11 @@ class TerminalUI:
         Args:
             hint (str): The hint to display.
         """
-        print("\n" + "-" * self.width)
-        print("VERITAS SAYS:".center(self.width))
-        print(f"\n\"{hint}\"\n")
-        print("-" * self.width)
+        # Using '=' instead of '-' for borders
+        print(self.colored_text("\n" + "=" * self.width, 'border'))
+        print(self.colored_text("VERITAS SAYS:".center(self.width), 'veritas'))
+        print(self.colored_text(f"\n\"{hint}\"\n", 'hint'))
+        print(self.colored_text("=" * self.width, 'border'))
     
     def display_rules(self, rules):
         """
@@ -172,24 +268,26 @@ class TerminalUI:
             rules (list): List of Rule objects.
         """
         self.clear_screen()
-        print("\n" + "-" * self.width)
-        print("VERIFICATION RULES".center(self.width))
-        print("-" * self.width + "\n")
+        # Using '=' instead of '-' for borders
+        print(self.colored_text("\n" + "=" * self.width, 'border'))
+        print(self.colored_text("VERIFICATION RULES".center(self.width), 'title'))
+        print(self.colored_text("=" * self.width + "\n", 'border'))
         
         for i, rule in enumerate(rules, 1):
-            print(f"{i}. {rule.name}: {rule.description}")
+            print(f"{self.colored_text(str(i) + '. ' + rule.name + ':', 'key')} {self.colored_text(rule.description, 'normal')}")
         
-        print("\n" + "-" * self.width)
-        input("\nPress Enter to return...")
+        print(self.colored_text("\n" + "-" * self.width, 'border'))
+        input(self.colored_text("\nPress Enter to return...", 'hint'))
     
     def display_help(self):
         """
         Display help information.
         """
         self.clear_screen()
-        print("\n" + "-" * self.width)
-        print("AVAILABLE COMMANDS".center(self.width))
-        print("-" * self.width + "\n")
+        # Using '=' instead of '-' for borders
+        print(self.colored_text("\n" + "=" * self.width, 'border'))
+        print(self.colored_text("AVAILABLE COMMANDS".center(self.width), 'title'))
+        print(self.colored_text("=" * self.width + "\n", 'border'))
         
         commands = [
             ("approve", "Approve the current traveler"),
@@ -202,10 +300,10 @@ class TerminalUI:
         ]
         
         for cmd, desc in commands:
-            print(f"{cmd.ljust(10)} - {desc}")
+            print(f"{self.colored_text(cmd.ljust(10), 'command')} - {self.colored_text(desc, 'normal')}")
         
-        print("\n" + "-" * self.width)
-        input("\nPress Enter to return...")
+        print(self.colored_text("\n" + "-" * self.width, 'border'))
+        input(self.colored_text("\nPress Enter to return...", 'hint'))
     
     def display_feedback(self, is_correct, narrative_update):
         """
@@ -216,11 +314,11 @@ class TerminalUI:
             narrative_update (str): The narrative update to display.
         """
         if is_correct:
-            print("\n✓ Correct decision!")
+            self.colored_print("\n✓ Correct decision!", 'success')
         else:
-            print("\n✗ Incorrect decision!")
+            self.colored_print("\n✗ Incorrect decision!", 'error')
         
-        print(f"\n{narrative_update}")
+        print(self.colored_text(f"\n{narrative_update}", 'normal'))
     
     def display_ai_reasoning(self, reasoning, confidence):
         """
@@ -230,9 +328,14 @@ class TerminalUI:
             reasoning (str): The AI's reasoning.
             confidence (float): The AI's confidence level.
         """
-        print("\nBorder Control AI Assessment:")
-        print(f"Confidence: {int(confidence * 100)}%")
-        print(f"Reasoning: {reasoning}")
+        print(self.colored_text("\nBorder Control AI Assessment:", 'header'))
+        
+        # Color the confidence based on its level
+        confidence_pct = int(confidence * 100)
+        confidence_style = 'success' if confidence_pct > 75 else 'warning' if confidence_pct > 50 else 'error'
+        
+        print(f"{self.colored_text('Confidence:', 'key')} {self.colored_text(f'{confidence_pct}%', confidence_style)}")
+        print(f"{self.colored_text('Reasoning:', 'key')} {self.colored_text(reasoning, 'normal')}")
     
     def display_game_over(self, ending_type, ending_message):
         """
@@ -243,23 +346,30 @@ class TerminalUI:
             ending_message (str): The ending message to display.
         """
         self.clear_screen()
-        print("\n" + "=" * self.width)
-        print("GAME OVER".center(self.width))
-        print("=" * self.width + "\n")
+        self.draw_border("GAME OVER")
         
-        print(ending_message.center(self.width) + "\n")
+        print(self.colored_text(ending_message.center(self.width) + "\n", 'normal'))
+        
+        ending_style = {
+            'good': 'success',
+            'corrupt': 'error',
+            'strict': 'warning',
+            'bad': 'error'
+        }.get(ending_type, 'normal')
         
         if ending_type == 'good':
-            print("Congratulations! You've successfully completed your mission.".center(self.width))
+            msg = "Congratulations! You've successfully completed your mission."
         elif ending_type == 'corrupt':
-            print("Your corruption has caught up with you.".center(self.width))
+            msg = "Your corruption has caught up with you."
         elif ending_type == 'strict':
-            print("Your strict adherence to rules has made you unpopular.".center(self.width))
+            msg = "Your strict adherence to rules has made you unpopular."
         else:
-            print("Your career has come to an unfortunate end.".center(self.width))
+            msg = "Your career has come to an unfortunate end."
+            
+        print(self.colored_text(msg.center(self.width), ending_style))
         
-        print("\n" + "=" * self.width)
-        input("\nPress Enter to exit...".center(self.width))
+        print("\n" + self.colored_text("=" * self.width, 'border'))
+        input(self.colored_text("\nPress Enter to exit...".center(self.width), 'hint'))
     
     def get_user_input(self):
         """
@@ -270,9 +380,9 @@ class TerminalUI:
         """
         try:
             user_input = prompt(
-                'Enter command > ',
+                HTML('<span style="fg:ansicyan">Enter command</span> <span style="fg:ansiwhite">&gt;</span> '),
                 completer=command_completer,
-                style=style
+                style=pt_style
             )
             return user_input.strip().lower()
         except KeyboardInterrupt:
@@ -287,10 +397,11 @@ class TerminalUI:
             score (int): Current score.
             state_summary (str): Summary of the narrative state.
         """
-        print("\n" + "-" * self.width)
-        print(f"Day: {day} | Score: {score}")
-        print(state_summary)
-        print("-" * self.width)
+        # Using '=' instead of '-' for borders
+        print(self.colored_text("\n" + "=" * self.width, 'border'))
+        print(f"{self.colored_text('Day:', 'key')} {self.colored_text(str(day), 'value')} | {self.colored_text('Score:', 'key')} {self.colored_text(str(score), 'value')}")
+        print(self.colored_text(state_summary, 'border_info'))
+        print(self.colored_text("=" * self.width, 'border'))
     
     def display_setting_info(self, setting):
         """
@@ -299,17 +410,18 @@ class TerminalUI:
         Args:
             setting (dict): The current border setting.
         """
-        print("\n" + "-" * self.width)
-        print(f"CURRENT ASSIGNMENT: {setting['name']}")
-        print(f"\n{setting['situation']}")
+        # Using '=' instead of '-' for borders
+        print(self.colored_text("\n" + "=" * self.width, 'border'))
+        print(self.colored_text(f"CURRENT ASSIGNMENT: {setting['name']}", 'title'))
+        print(self.colored_text(f"\n{setting['situation']}", 'normal'))
         
-        print("\nDocument Requirements:")
+        print(self.colored_text("\nDocument Requirements:", 'header'))
         for req in setting['document_requirements']:
-            print(f"- {req}")
+            print(self.colored_text(f"- {req}", 'normal'))
         
-        print("\nCommon Issues:")
+        print(self.colored_text("\nCommon Issues:", 'header'))
         for issue in setting['common_issues']:
-            print(f"- {issue}")
+            print(self.colored_text(f"- {issue}", 'normal'))
             
-        print("\n" + "-" * self.width)
-        input("\nPress Enter to continue...")
+        print(self.colored_text("\n" + "-" * self.width, 'border'))
+        input(self.colored_text("\nPress Enter to continue...", 'hint'))
