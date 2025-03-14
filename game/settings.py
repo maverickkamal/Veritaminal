@@ -7,6 +7,7 @@ for different game scenarios.
 
 import random
 import logging
+from .ui import TerminalUI  # Import TerminalUI for consistent styling
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ class SettingsManager:
         self.current_setting = None
         self.available_settings = BORDER_SETTINGS
         self.custom_rules = []
+        self.ui = TerminalUI()  # Create UI instance for styling
         
     def get_available_settings(self):
         """
@@ -167,3 +169,29 @@ class SettingsManager:
                 context.append(f"- {rule}")
                 
         return "\n".join(context)
+        
+    def display_current_setting(self):
+        """
+        Display information about the current setting with consistent styling.
+        """
+        if not self.current_setting:
+            self.current_setting = self.available_settings[0]
+            
+        self.ui.clear_screen()
+        self.ui.draw_border(f"BORDER: {self.current_setting['name']}")
+        
+        print(self.ui.colored_text(f"SITUATION:", 'header'))
+        print(self.ui.colored_text(f"{self.current_setting['situation']}\n", 'value'))
+        
+        print(self.ui.colored_text("DOCUMENT REQUIREMENTS:", 'header'))
+        for req in self.current_setting["document_requirements"]:
+            print(self.ui.colored_text(f"- {req}", 'value'))
+        
+        print(self.ui.colored_text("\nCOMMON ISSUES:", 'header'))
+        for issue in self.current_setting["common_issues"]:
+            print(self.ui.colored_text(f"- {issue}", 'value'))
+            
+        if self.custom_rules:
+            print(self.ui.colored_text("\nADDITIONAL RULES:", 'header'))
+            for rule in self.custom_rules:
+                print(self.ui.colored_text(f"- {rule}", 'value'))
