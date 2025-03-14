@@ -264,5 +264,6 @@ def run_gameplay_loop(menu_manager):
             print(f"\n{day_message}")
             input("\nPress Enter to continue...")
 
+# Keep this block to ensure it works both as a module and as a script
 if __name__ == "__main__":
     sys.exit(main())
