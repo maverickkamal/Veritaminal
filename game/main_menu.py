@@ -10,6 +10,7 @@ import glob
 from .gameplay import GameplayManager
 from .settings import SettingsManager
 from .ui import TerminalUI
+from colorama import Fore, Back, Style
 
 logger = logging.getLogger(__name__)
 
@@ -39,20 +40,19 @@ class MainMenuManager:
             str: The selected option.
         """
         self.ui.clear_screen()
-        print("\n" + "=" * self.ui.width)
-        print("VERITAMINAL: Document Verification Game".center(self.ui.width))
-        print("=" * self.ui.width + "\n")
+        # Using UI's styled borders instead of plain text
+        self.ui.draw_border("VERITAMINAL: Document Verification Game")
         
         # Display career stats if any games have been played
         if self.career_stats["games_completed"] > 0:
-            print("CAREER STATISTICS".center(self.ui.width))
-            print(f"Games Completed: {self.career_stats['games_completed']}")
-            print(f"Total Career Score: {self.career_stats['total_score']}")
-            print(f"Borders Served: {len(self.career_stats['borders_served'])}")
-            print(f"Highest Day Reached: {self.career_stats['highest_day_reached']}")
-            print("\n" + "-" * self.ui.width + "\n")
+            print(self.ui.colored_text("CAREER STATISTICS".center(self.ui.width), 'title'))
+            print(self.ui.colored_text(f"Games Completed: {self.career_stats['games_completed']}", 'value'))
+            print(self.ui.colored_text(f"Total Career Score: {self.career_stats['total_score']}", 'value'))
+            print(self.ui.colored_text(f"Borders Served: {len(self.career_stats['borders_served'])}", 'value'))
+            print(self.ui.colored_text(f"Highest Day Reached: {self.career_stats['highest_day_reached']}", 'value'))
+            print("\n" + self.ui.colored_text("=" * self.ui.width, 'border') + "\n")
         
-        print("MAIN MENU".center(self.ui.width))
+        print(self.ui.colored_text("MAIN MENU".center(self.ui.width), 'title'))
         options = [
             "1. Start New Career",
             "2. Continue Previous Career",
@@ -62,14 +62,14 @@ class MainMenuManager:
         ]
         
         for option in options:
-            print(option.center(self.ui.width))
+            print(self.ui.colored_text(option.center(self.ui.width), 'value'))
             
-        print("\n" + "=" * self.ui.width)
+        print("\n" + self.ui.colored_text("=" * self.ui.width, 'border'))
         
         choice = ""
         valid_choices = ["1", "2", "3", "4", "5"]
         while choice not in valid_choices:
-            choice = input("\nEnter your selection (1-5): ")
+            choice = input("\n" + self.ui.colored_text("Enter your selection (1-5): ", 'hint'))
             
         return choice
     
@@ -82,24 +82,22 @@ class MainMenuManager:
         """
         # Display available border settings
         self.ui.clear_screen()
-        print("\n" + "=" * self.ui.width)
-        print("SELECT YOUR BORDER ASSIGNMENT".center(self.ui.width))
-        print("=" * self.ui.width + "\n")
+        self.ui.draw_border("SELECT YOUR BORDER ASSIGNMENT")
         
         settings = self.settings_manager.get_available_settings()
         for i, setting in enumerate(settings, 1):
-            print(f"{i}. {setting['name']}")
-            print(f"   {setting['description']}\n")
+            print(self.ui.colored_text(f"{i}. {setting['name']}", 'header'))
+            print(self.ui.colored_text(f"   {setting['description']}\n", 'value'))
         
         # Let player choose a border or go back to main menu
-        print("0. Return to Main Menu")
+        print(self.ui.colored_text("0. Return to Main Menu", 'command'))
         
         choice = -1
         while choice < 0 or choice > len(settings):
             try:
-                choice = int(input(f"\nEnter your choice (0-{len(settings)}): "))
+                choice = int(input("\n" + self.ui.colored_text(f"Enter your choice (0-{len(settings)}): ", 'hint')))
             except ValueError:
-                print("Please enter a valid number.")
+                print(self.ui.colored_text("Please enter a valid number.", 'error'))
                 
         if choice == 0:
             return False  # Return to main menu
@@ -108,13 +106,13 @@ class MainMenuManager:
         selected_setting = self.gameplay_manager.initialize_game(settings[choice-1]["id"])
         
         self.ui.clear_screen()
-        print(f"\nYou selected: {selected_setting['name']}")
-        print(f"\n{selected_setting['description']}\n")
-        print("Current rules:")
+        print(self.ui.colored_text(f"\nYou selected: {selected_setting['name']}", 'header'))
+        print(self.ui.colored_text(f"\n{selected_setting['description']}\n", 'value'))
+        print(self.ui.colored_text("Current rules:", 'header'))
         for rule in self.gameplay_manager.settings_manager.get_all_rules():
-            print(f"- {rule}")
+            print(self.ui.colored_text(f"- {rule}", 'value'))
         
-        input("\nPress Enter to begin your shift...")
+        input("\n" + self.ui.colored_text("Press Enter to begin your shift...", 'hint'))
         return True
     
     def continue_previous_career(self):
@@ -125,30 +123,28 @@ class MainMenuManager:
             bool: True if a game was loaded, False otherwise.
         """
         self.ui.clear_screen()
-        print("\n" + "=" * self.ui.width)
-        print("LOAD PREVIOUS CAREER".center(self.ui.width))
-        print("=" * self.ui.width + "\n")
+        self.ui.draw_border("LOAD PREVIOUS CAREER")
         
         # Get list of save files
         save_files = self._get_save_files()
         
         if not save_files:
-            print("No saved games found.")
-            input("\nPress Enter to return to main menu...")
+            print(self.ui.colored_text("No saved games found.", 'error'))
+            input("\n" + self.ui.colored_text("Press Enter to return to main menu...", 'hint'))
             return False
         
-        print("Available saved games:")
+        print(self.ui.colored_text("Available saved games:", 'header'))
         for i, (save_path, save_name) in enumerate(save_files, 1):
-            print(f"{i}. {save_name}")
+            print(self.ui.colored_text(f"{i}. {save_name}", 'value'))
         
-        print("\n0. Return to Main Menu")
+        print("\n" + self.ui.colored_text("0. Return to Main Menu", 'command'))
         
         choice = -1
         while choice < 0 or choice > len(save_files):
             try:
-                choice = int(input(f"\nEnter your choice (0-{len(save_files)}): "))
+                choice = int(input("\n" + self.ui.colored_text(f"Enter your choice (0-{len(save_files)}): ", 'hint')))
             except ValueError:
-                print("Please enter a valid number.")
+                print(self.ui.colored_text("Please enter a valid number.", 'error'))
                 
         if choice == 0:
             return False  # Return to main menu
@@ -158,20 +154,20 @@ class MainMenuManager:
         success = self.gameplay_manager.load_game(save_path)
         
         if success:
-            print(f"\nGame loaded successfully!")
+            print(self.ui.colored_text(f"\nGame loaded successfully!", 'success'))
             
             # Display border info
             setting = self.gameplay_manager.settings_manager.get_current_setting()
             day = self.gameplay_manager.memory_manager.memory["game_state"]["day"]
             
-            print(f"\nCurrent Assignment: {setting['name']}")
-            print(f"Current Day: {day}")
+            print(self.ui.colored_text(f"\nCurrent Assignment: {setting['name']}", 'header'))
+            print(self.ui.colored_text(f"Current Day: {day}", 'value'))
             
-            input("\nPress Enter to continue your shift...")
+            input("\n" + self.ui.colored_text("Press Enter to continue your shift...", 'hint'))
             return True
         else:
-            print("\nFailed to load game.")
-            input("\nPress Enter to return to main menu...")
+            print(self.ui.colored_text("\nFailed to load game.", 'error'))
+            input("\n" + self.ui.colored_text("Press Enter to return to main menu...", 'hint'))
             return False
     
     def view_border_settings(self):
@@ -182,28 +178,26 @@ class MainMenuManager:
             bool: Always False to return to main menu.
         """
         self.ui.clear_screen()
-        print("\n" + "=" * self.ui.width)
-        print("BORDER SETTINGS".center(self.ui.width))
-        print("=" * self.ui.width + "\n")
+        self.ui.draw_border("BORDER SETTINGS")
         
         settings = self.settings_manager.get_available_settings()
         
         for setting in settings:
-            print(f"= {setting['name']} =".center(self.ui.width))
-            print(f"\n{setting['description']}")
-            print(f"\nSituation: {setting['situation']}")
+            print(self.ui.colored_text(f"= {setting['name']} =".center(self.ui.width), 'title'))
+            print(self.ui.colored_text(f"\n{setting['description']}", 'value'))
+            print(self.ui.colored_text(f"\nSituation: {setting['situation']}", 'value'))
             
-            print("\nDocument Requirements:")
+            print(self.ui.colored_text("\nDocument Requirements:", 'header'))
             for req in setting['document_requirements']:
-                print(f"- {req}")
+                print(self.ui.colored_text(f"- {req}", 'value'))
                 
-            print("\nCommon Issues:")
+            print(self.ui.colored_text("\nCommon Issues:", 'header'))
             for issue in setting['common_issues']:
-                print(f"- {issue}")
+                print(self.ui.colored_text(f"- {issue}", 'value'))
                 
-            print("\n" + "-" * self.ui.width + "\n")
+            print("\n" + self.ui.colored_text("=" * self.ui.width, 'border') + "\n")
         
-        input("Press Enter to return to main menu...")
+        input(self.ui.colored_text("Press Enter to return to main menu...", 'hint'))
         return False
     
     def view_game_rules(self):
@@ -214,9 +208,7 @@ class MainMenuManager:
             bool: Always False to return to main menu.
         """
         self.ui.clear_screen()
-        print("\n" + "=" * self.ui.width)
-        print("GAME RULES".center(self.ui.width))
-        print("=" * self.ui.width + "\n")
+        self.ui.draw_border("GAME RULES")
         
         rules = [
             "As a border control agent, your job is to verify travel documents.",
@@ -232,10 +224,10 @@ class MainMenuManager:
         ]
         
         for rule in rules:
-            print(f"• {rule}")
+            print(self.ui.colored_text(f"• {rule}", 'value'))
         
-        print("\n" + "-" * self.ui.width)
-        print("\nCommands during gameplay:".center(self.ui.width))
+        print("\n" + self.ui.colored_text("=" * self.ui.width, 'border'))
+        print(self.ui.colored_text("\nCommands during gameplay:".center(self.ui.width), 'header'))
         commands = [
             ("approve", "Approve the current traveler"),
             ("deny", "Deny the current traveler"),
@@ -247,10 +239,10 @@ class MainMenuManager:
         ]
         
         for cmd, desc in commands:
-            print(f"{cmd.ljust(10)} - {desc}")
+            print(f"{self.ui.colored_text(cmd.ljust(10), 'command')} - {self.ui.colored_text(desc, 'value')}")
             
-        print("\n" + "=" * self.ui.width)
-        input("\nPress Enter to return to main menu...")
+        print("\n" + self.ui.colored_text("=" * self.ui.width, 'border'))
+        input("\n" + self.ui.colored_text("Press Enter to return to main menu...", 'hint'))
         return False
     
     def update_career_stats(self, gameplay_manager):
