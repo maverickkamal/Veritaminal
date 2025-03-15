@@ -28,17 +28,23 @@ def build_package():
 def upload_to_test_pypi():
     """Upload the built package to TestPyPI first."""
     print("Uploading to TestPyPI...")
+    # Using local .pypirc file
+    pypirc_path = os.path.join(os.path.dirname(__file__), ".pypirc")
     subprocess.run([
         sys.executable, "-m", "twine", "upload", 
         "--repository", "testpypi",
+        "--config-file", pypirc_path,
         "dist/*"
     ], check=True)
 
 def upload_to_pypi():
     """Upload the built package to PyPI."""
     print("Uploading to PyPI...")
+    # Using local .pypirc file
+    pypirc_path = os.path.join(os.path.dirname(__file__), ".pypirc")
     subprocess.run([
         sys.executable, "-m", "twine", "upload",
+        "--config-file", pypirc_path,
         "dist/*"
     ], check=True)
 
