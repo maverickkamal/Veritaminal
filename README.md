@@ -61,7 +61,7 @@ veritaminal
 
 1. Clone this repository
    ```bash
-   git clone https://github.com/yourusername/veritaminal.git
+   git clone https://github.com/maverickkamal/veritaminal.git
    cd veritaminal
    ```
 
