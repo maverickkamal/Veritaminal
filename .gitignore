@@ -47,3 +47,4 @@ logs/
 Instruction/
 saves/
 utils/
+.pypirc
