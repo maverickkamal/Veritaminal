@@ -24,8 +24,41 @@ load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
 
+def get_api_key_from_user():
+    """Prompt the user to enter their API key and save it to .env file."""
+    print("\n\033[33mNo GEMINI_API_KEY found in .env file.\033[0m")
+    api_key = input("Please enter your Gemini API key: ")
+    
+    # Save to .env file for future use
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env")
+    
+    # Check if .env exists and if not, create it
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            lines = f.readlines()
+        
+        # Check if GEMINI_API_KEY line exists
+        key_exists = False
+        for i, line in enumerate(lines):
+            if line.startswith("GEMINI_API_KEY="):
+                lines[i] = f"GEMINI_API_KEY={api_key}\n"
+                key_exists = True
+                break
+        
+        if not key_exists:
+            lines.append(f"GEMINI_API_KEY={api_key}\n")
+        
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
+    else:
+        with open(env_path, 'w') as f:
+            f.write(f"GEMINI_API_KEY={api_key}\n")
+    
+    print("\033[32mAPI key saved to .env file.\033[0m")
+    return api_key
+
 if not api_key:
-    raise ValueError("No API key found. Please set GEMINI_API_KEY in your .env file.")
+    api_key = get_api_key_from_user()
 
 client = genai.Client(api_key=api_key)
 
