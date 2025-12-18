@@ -5,7 +5,8 @@
 
 A terminal-based document verification game where players act as border control agents, verifying AI-generated documents to approve or deny travelers. Test your judgment, attention to detail, and critical thinking as you navigate through an immersive narrative experience.
 
-<img width="1105" height="454" alt="Screenshot 2025-06-08 231944" src="https://github.com/user-attachments/assets/0a913e13-a7c5-41d1-a65d-4b82c6fa2e0c" />
+<img width="1099" height="392" alt="Screenshot 2025-06-08 232136" src="https://github.com/user-attachments/assets/216e5746-8fc2-4b9e-8744-ec2675b3fd58" />
+
 
 
 <img width="1105" height="454" alt="Screenshot 2025-06-08 231944" src="https://github.com/user-attachments/assets/039a512e-daba-4fd3-a96c-4d6e2e897b31" />
