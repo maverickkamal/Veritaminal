@@ -12,7 +12,7 @@ A terminal-based document verification game where players act as border control 
 <img width="1105" height="454" alt="Screenshot 2025-06-08 231944" src="https://github.com/user-attachments/assets/039a512e-daba-4fd3-a96c-4d6e2e897b31" />
 
 
-## 🎮 Game Overview
+## Game Overview
 
 In Veritaminal, you play as a border control agent stationed at various checkpoints around a fictional world. Your job is to review travel documents and decide whether to approve or deny entry based on the current rules and regulations.
 
@@ -25,7 +25,7 @@ In Veritaminal, you play as a border control agent stationed at various checkpoi
 - **Save System**: Save your progress and continue your career later
 - **Career Tracking**: See how your decisions impact your career stats over time
 
-## 📋 Gameplay
+## Gameplay
 
 ### Core Mechanics:
 
@@ -44,7 +44,7 @@ In Veritaminal, you play as a border control agent stationed at various checkpoi
 - `help` - Show help information
 - `quit` - Exit the game
 
-## 🔧 Installation
+## Installation
 
 ### Prerequisites
 
@@ -86,7 +86,7 @@ veritaminal
    GEMINI_API_KEY=your_api_key_here
    ```
 
-## 🚀 Running the Game
+## Running the Game
 
 ### Windows
 - Double-click on `veritaminal.bat`, or
@@ -111,29 +111,9 @@ Example:
 python run_game.py --debug --load saves/veritaminal_save_20250312_222841.json
 ```
 
-## 📁 Project Structure
 
-```
-veritaminal/
-├── __init__.py         # Package initialization
-├── run_game.py         # Entry point script
-├── setup_veritaminal.py  # Setup script for API keys
-├── requirements.txt    # Python dependencies
-├── game/               # Core game modules
-│   ├── __init__.py     
-│   ├── api.py          # API interactions for content generation
-│   ├── gameplay.py     # Core gameplay mechanics
-│   ├── main.py         # Main game loop
-│   ├── main_menu.py    # Menu system
-│   ├── memory.py       # Game state persistence
-│   ├── narrative.py    # Story management
-│   ├── settings.py     # Game settings and configuration
-│   └── ui.py           # Terminal user interface
-├── saves/              # Directory for saved games
-└── utils/              # Utility scripts
-```
 
-## ⚙️ Game Mechanics Explained
+## Game Mechanics Explained
 
 ### Document Verification
 
@@ -164,7 +144,7 @@ Multiple endings are possible based on:
 - **Corruption Level**: How often you've bent the rules
 - **Days Completed**: Whether you completed your 10-day assignment
 
-## 🛠️ Development
+## Development
 
 To install in development mode:
 
@@ -190,7 +170,7 @@ The following Python packages are used:
 - requests: For API calls
 - python-dotenv: For managing API keys
 
-## ❓ Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -215,11 +195,11 @@ python run_game.py --debug
 
 The log file `veritaminal.log` will contain detailed information about game operations.
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - This game was inspired by "Papers, Please" by Lucas Pope
 - Uses the Google Gemini API for document and narrative generation
